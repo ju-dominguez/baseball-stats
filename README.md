@@ -1,13 +1,20 @@
-# 🧢 Capital of Texas Baseball Stats Tracker
-
+# 🚀 Quick Start (GitHub Codespaces)
 This notebook scrapes and analyzes player stats from the Capital of Texas Baseball League website.
 
-## 🚀 Get Started (No coding needed!)
 
+# ⚾️ Get Started (No coding needed!)
 1. Click the **"Code"** button above
-2. Under **"Codespaces"** select **"Open in JupyterLab"**
+2. Under **"Codespaces"** select **"Open in main"**
 3. Wait ~1 min for setup
-4. Open the notebook: `ctbl_scraper.ipynb`
-5. Run the cells and enjoy the insights!
+4. Open the **Terminal** tab (top menu ▶️ Terminal ▶️ New Terminal).
+5. Run the scraper
+```
+python main.py
+```
 
-📊 Stats include AVG, OBP, SLG, OPS, Optimized Lineups and player rankings.
+
+# 📊 The script will:
+- Fetch all pages of CTBL stats.
+- Compute advanced metrics (like wOBA/ wRAA).
+- Print the top hitters for your chosen team.
+- Print an optimized batting order.
