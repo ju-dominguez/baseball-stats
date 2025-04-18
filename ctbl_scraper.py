@@ -2,44 +2,116 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from itertools import combinations
+from IPython.display import display
 
+# ========== CONFIGURATION ==========
+PARAMS = {
+    "p": "stats",
+    "bsort": "plateappearances",
+    "u": "CTBL",
+    "s": "baseball"
+}
+MAX_PAGES = 10
+IDENTITY_COLS = ["Name", "Team"]
 ADV_STATS = ["AVG", "OBP", "SLG", "OPS", "wOBA", "wRAA"]
-MIN_PA = 6
+MIN_PA = 10
 
-# Fetch & Clean Functions
-def fetch_stats_table(url):
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, "html.parser")
-    table = soup.find("table")
-    rows = table.find_all("tr")
+# ========== HELPERS ==========
+def get_qualified(df, min_pa=MIN_PA):
+    return df[df["PA"] >= min_pa]
 
-    headers = [td.text.strip() for td in rows[0].find_all("td")]
-    data = [[td.text.strip() for td in row.find_all("td")] for row in rows[1:] if row.find_all("td")]
-    df = pd.DataFrame(data, columns=headers)
+def trim_zero(val):
+    if isinstance(val, float):
+        return f"{val:.3f}".lstrip("0")
+    return val
+
+# ========== SCRAPING & CLEANING ==========
+def scrape_league_stats(base_url, params=PARAMS, max_pages=10):
+    all_data = []
+    page = 1
+    print("\U0001F4CA Fetching league data...")
+
+    while page <= max_pages:
+        print(f"🔍 Scraping page {page}...")
+        if page > 1:
+            params["bpageNum"] = page
+        else:
+            params.pop("bpageNum", None)
+
+        response = requests.get(base_url, params=params)
+        soup = BeautifulSoup(response.content, "html.parser")
+        table = soup.find("table")
+
+        if not table:
+            print("❌ No table found. Stopping.")
+            break
+
+        rows = table.find_all("tr")
+        if len(rows) < 2:
+            print("❌ No data rows. Stopping.")
+            break
+
+        # Ensure rows[0] exists before accessing it
+        header = None
+        if rows:
+            header = [td.text.strip() for td in rows[0].find_all("td")]
+
+        data_rows = [
+            [td.text.strip() for td in row.find_all("td")]
+            for row in rows[1:]
+            if header and len(row.find_all("td")) == len(header)
+        ]
+
+        if not data_rows:
+            print("❌ No valid player rows. Stopping.")
+            break
+
+        all_data.extend(data_rows)
+        page += 1
+
+    if not all_data:
+        print("⚠️ No data scraped. Returning an empty DataFrame.")
+        return pd.DataFrame()
+
+    return pd.DataFrame(all_data, columns=header)
+
+def clean_and_convert(df, identity_cols=IDENTITY_COLS):
+    cols_to_convert = [col for col in df.columns if col not in identity_cols]
+    df.replace({'-': 0, '': 0}, inplace=True)
+    df[cols_to_convert] = df[cols_to_convert].apply(pd.to_numeric, errors='coerce')
     return df
 
-def clean_and_calculate(df):
-    numeric_cols = ['PA', 'AB', 'H', '2B', '3B', 'HR', 'BB', 'HBP', 'SO']
-    for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+# ========== METRIC CALCULATIONS ==========
+def calculate_woba_and_wraa(df, woba_scale=1.15, min_pa=MIN_PA):
+    df["1B"] = df["H"] - df["2B"] - df["3B"] - df["HR"]
+    df["wOBA_numerator"] = (
+        0.69 * df["BB"] +
+        0.72 * df["HBP"] +
+        0.89 * df["1B"] +
+        1.27 * df["2B"] +
+        1.62 * df["3B"] +
+        2.10 * df["HR"]
+    )
+    df["wOBA_denominator"] = df["AB"] + df["BB"] + df["HBP"]
+    df["wOBA"] = df["wOBA_numerator"] / df["wOBA_denominator"]
 
-    df['1B'] = df['H'] - df['2B'] - df['3B'] - df['HR']
-    df['TB'] = df['1B'] + 2*df['2B'] + 3*df['3B'] + 4*df['HR']
-    df['OBP'] = (df['H'] + df['BB'] + df['HBP']) / (df['AB'] + df['BB'] + df['HBP'])
-    df['SLG'] = df['TB'] / df['AB']
-    df['OPS'] = df['OBP'] + df['SLG']
-    df['BABIP'] = (df['H'] - df['HR']) / (df['AB'] - df['SO'] + 0.0001)
-    return df
+    qualified = get_qualified(df, min_pa)
+    league_woba = qualified["wOBA"].mean()
 
-def get_qualified(df, min_pa):
-    df['PA'] = pd.to_numeric(df['PA'], errors='coerce').fillna(0)
-    return df[df['PA'] >= min_pa]
+    df["wRAA"] = ((df["wOBA"] - league_woba) / woba_scale) * df["PA"]
+    return df, league_woba
 
-# Team Analysis Functions
-def display_team_stat_leaders(df, team_name, stat='OPS', min_pa=MIN_PA, top_n=5):
-    team_df = get_qualified(df[df["Team"] == team_name], min_pa)
-    top_df = team_df.sort_values(by=stat, ascending=False)
-    return top_df[['Name', 'PA', 'OBP', 'SLG', 'OPS', 'BABIP']].head(top_n)
+# ========== TEAM ANALYSIS FUNCTIONS ==========
+def display_team_stat_leaders(df, team_name, stat_cols, min_pa=MIN_PA, top_n=10):
+    calculate_woba_and_wraa(df)
+    team_df = df[(df["Team"] == team_name) & (df["PA"] >= min_pa)]
+    if team_df.empty:
+        print(f"⚠️ No qualified players found for {team_name}.")
+        return
+    for stat in stat_cols:
+        print(f"\n🏆 Top {top_n} on {team_name} by {stat}:")
+        leaderboard = team_df.sort_values(by=stat, ascending=False)[["Name", "PA", stat]].head(top_n)
+        display(leaderboard)
 
 def calculate_handedness_score(lineup):
     score = 0
@@ -137,4 +209,23 @@ def generate_optimized_batting_order(df, team_name, handedness_dict, override_sp
     round_cols = ["AVG", "OBP", "SLG", "OPS", "wOBA", "wRAA", "K_rate"]
     lineup[round_cols] = lineup[round_cols].round(3)
 
-    return lineup
+    lineup_df = lineup.iloc[:9].copy()
+    bench_df = lineup.iloc[9:].copy()
+
+    stat_cols_trimmed = ["AVG", "OBP", "SLG", "OPS"]
+
+    # Display lineup (top 9)
+    print("🧢 Optimized Batting Lineup:")
+    print(
+        lineup_df[["Batting Order", "Bats", "Name"] + stat_cols_trimmed]
+        .to_string(index=False, formatters={col: trim_zero for col in stat_cols_trimmed})
+    )
+
+    # Display bench
+    if not bench_df.empty:
+        print("\n🪑 Bench Players:")
+        print(
+            bench_df[["Batting Order", "Bats", "Name"] + stat_cols_trimmed]
+            .to_string(index=False, formatters={col: trim_zero for col in stat_cols_trimmed})
+        )
+
