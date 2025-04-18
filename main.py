@@ -1,13 +1,14 @@
 from ctbl_scraper import (
-    fetch_stats_table,
-    clean_and_calculate,
+    scrape_league_stats,
+    clean_and_convert,
     display_team_stat_leaders,
     generate_optimized_batting_order
 )
 
 # Constants
-URL = "https://www.capitaloftexasbaseball.org/teams/default.asp?p=stats&bsort=plateappearances&u=CTBL&s=baseball"
+BASE_URL = "https://www.capitaloftexasbaseball.org/teams/default.asp"
 TEAM_NAME = "Austin Baseball Club"
+ADV_STATS = ["AVG", "OBP", "SLG", "OPS", "wOBA", "wRAA"]
 MIN_PA = 10
 
 handedness = {
@@ -24,18 +25,17 @@ override_spots = {
 }
 
 def main():
-    print("\U0001F4CA Fetching league data...")
-    df = fetch_stats_table(URL)
-    df = clean_and_calculate(df)
+    # 1. Scrape
+    df = scrape_league_stats(BASE_URL)
 
-    print(f"\n\U0001F3C6 Top {TEAM_NAME} Players by OPS:\n")
-    top_df = display_team_stat_leaders(df, TEAM_NAME)
-    print(top_df)
+    # 2. Clean & convert
+    df = clean_and_convert(df)
 
-    print(f"\n\U0001F9E2 Optimized Batting Order for {TEAM_NAME} (with handedness + override spots):\n")
-    lineup_df = generate_optimized_batting_order(df, TEAM_NAME, HANDEDNESS, OVERRIDE_SPOTS, MIN_PA)
-    if lineup_df is not None:
-        print(lineup_df[["Batting Order", "Bats", "Name", "AVG", "OBP", "SLG", "OPS"]].to_string(index=False))
+    # 3. Display team stat leaders
+    display_team_stat_leaders(df, TEAM_NAME, ADV_STATS, MIN_PA)
+
+    # 4. Display optimized batting order
+    generate_optimized_batting_order(df, TEAM_NAME, handedness, override_spots, MIN_PA)
 
 if __name__ == "__main__":
     main()
