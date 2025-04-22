@@ -2,93 +2,92 @@ from ctbl_scraper import (
     scrape_league_stats,
     clean_and_convert,
     display_team_stat_leaders,
-    generate_optimized_batting_order
+    generate_optimized_batting_order,
+    plot_leaderboard
 )
 
-# Constants
-BASE_URL = "https://www.capitaloftexasbaseball.org/teams/default.asp"
-TEAM_NAME = "Austin Baseball Club"
-ADV_STATS = ["AVG", "OBP", "SLG", "OPS", "wOBA", "wRAA"]
-MIN_PA = 10
-
-handedness = {
+# — Configuration —
+BASE_URL      = "https://www.capitaloftexasbaseball.org/teams/default.asp"
+TEAM_LIST     = [
+    "Austin Baseball Club", "Austin Mudcats", "Austin Reds", "ATX Thunder",
+    "Charros", "Chupacabras", "Devil Rays", "Pilots", "Rebels", "Villain", "Zephyrs"
+]
+ADV_STATS     = ["AVG", "OBP", "SLG", "OPS", "wOBA", "wRAA"]
+MIN_PA        = 10
+HAND_DICT     = {
     'King, Demarcus': 'L',
-    'Cho, Jason': 'L',
-    'Manzo, Joel': 'L',
+    'Cho, Jason':    'L',
+    'Manzo, Joel':   'L',
     'Hedrick, Paul': 'S'
 }
-
-override_spots = {
-    'King, Demarcus': 0,  # Force to Leadoff
-    'Hedrick, Paul': 3,   # Force to Cleanup
-    'Cho, Jason': 6,      # Force to 7th
+OVERRIDE_SPOTS = {
+    'King, Demarcus': 1,  # leadoff
+    'Hedrick, Paul':  4,  # cleanup
+    'Cho, Jason':     7   # 7th
 }
 
-TEAM_LIST = [
-    "Austin Baseball Club",
-    "Austin Mudcats",
-    "Austin Reds",
-    "ATX Thunder",
-    "Charros",
-    "Chupacabras",
-    "Devil Rays",
-    "Pilots",
-    "Rebels",
-    "Villain",
-    "Zephyrs"
-]
-
 def choose_team_and_show(df):
-    # Build a mapping 1→team, 2→team… N→team
-    options = {str(i+1): team for i, team in enumerate(TEAM_LIST)}
-    options[str(len(TEAM_LIST)+1)] = None  # Exit option
-
+    opts = {str(i+1): team for i, team in enumerate(TEAM_LIST)}
+    opts[str(len(TEAM_LIST)+1)] = None
     while True:
-        print("\nChoose a team:")
-        for key, team in options.items():
-            label = team or "Exit"
-            print(f"{key}: {label}")
-
-        choice = input(f"Enter your choice (1-{len(options)}): ").strip()
-        team = options.get(choice)
-        if team is None:
-            print("Returning to main menu.")
+        print("\nSelect a team:")
+        for k, v in opts.items():
+            print(f"{k}: {v or 'Back'}")
+        c = input("> ").strip()
+        if c not in opts:
+            print("❌ Invalid choice.")
+        elif opts[c] is None:
             break
-        elif team:
-            display_team_stat_leaders(df, team, ADV_STATS, MIN_PA)
         else:
-            print("Invalid choice, try again.")
+            display_team_stat_leaders(df, opts[c], ADV_STATS, MIN_PA)
 
+def choose_and_plot(df):
+    opts = {str(i+1): stat for i, stat in enumerate(ADV_STATS)}
+    opts[str(len(ADV_STATS)+1)] = None
+    while True:
+        print("\nSelect stat to plot:")
+        for k, v in opts.items():
+            print(f"{k}: {v or 'Back'}")
+        c = input("> ").strip()
+        if c not in opts:
+            print("❌ Invalid choice.")
+        elif opts[c] is None:
+            break
+        else:
+            plot_leaderboard(df, opts[c], MIN_PA)
+
+MAIN_MENU = {
+    "1": ("Team Stat Leaders", lambda df: choose_team_and_show(df)),
+    "2": ("Optimized Batting Order (ABC)", 
+          lambda df: generate_optimized_batting_order(df, TEAM_LIST[0], HAND_DICT, OVERRIDE_SPOTS, MIN_PA)),
+    "3": ("Plot League Leaders", lambda df: choose_and_plot(df)),
+    "4": ("Exit", None),
+}
 
 def main():
-    # 1. Scrape
-    df = scrape_league_stats(BASE_URL)
+    # 1) Scrape & clean
+    df_raw = scrape_league_stats(BASE_URL)
+    if df_raw.empty:
+        print("⚠️ No data fetched. Exiting.")
+        return
+    df = clean_and_convert(df_raw)
 
-    # 2. Clean & convert
-    df = clean_and_convert(df)
-
+    # 2) Main loop
     while True:
-        print("\nChoose an option:")
-        print("1. Display team stat leaders")
-        print("2. Generate Optimized Batting Order (ABC Only)")
-        print("3. Exit")
+        print("\nMain Menu:")
+        for key, (label, _) in MAIN_MENU.items():
+            print(f"{key}) {label}")
+        choice = input("> ").strip()
 
-        choice = input("Enter your choice (1-3): ")
-
-        if choice == '1':
-            choose_team_and_show(df)
-
-        elif choice == '2':
-            while True: 
-                generate_optimized_batting_order(df, "Austin Baseball Club", handedness, override_spots, MIN_PA)
-                break 
-
-        elif choice == '3':
-            print("Goodbye!")
+        if choice == "4":
+            print("👋 Goodbye!")
             break
-        
+
+        action = MAIN_MENU.get(choice, (None, None))[1]
+        if action:
+            action(df)
         else:
-            print("Invalid choice. Try again")
+            print("❌ Invalid choice.")
 
 if __name__ == "__main__":
     main()
