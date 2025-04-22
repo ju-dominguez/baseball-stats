@@ -24,6 +24,42 @@ override_spots = {
     'Cho, Jason': 6,      # Force to 7th
 }
 
+TEAM_LIST = [
+    "Austin Baseball Club",
+    "Austin Mudcats",
+    "Austin Reds",
+    "ATX Thunder",
+    "Charros",
+    "Chupacabras",
+    "Devil Rays",
+    "Pilots",
+    "Rebels",
+    "Villain",
+    "Zephyrs"
+]
+
+def choose_team_and_show(df):
+    # Build a mapping 1→team, 2→team… N→team
+    options = {str(i+1): team for i, team in enumerate(TEAM_LIST)}
+    options[str(len(TEAM_LIST)+1)] = None  # Exit option
+
+    while True:
+        print("\nChoose a team:")
+        for key, team in options.items():
+            label = team or "Exit"
+            print(f"{key}: {label}")
+
+        choice = input(f"Enter your choice (1-{len(options)}): ").strip()
+        team = options.get(choice)
+        if team is None:
+            print("Returning to main menu.")
+            break
+        elif team:
+            display_team_stat_leaders(df, team, ADV_STATS, MIN_PA)
+        else:
+            print("Invalid choice, try again.")
+
+
 def main():
     # 1. Scrape
     df = scrape_league_stats(BASE_URL)
@@ -31,11 +67,28 @@ def main():
     # 2. Clean & convert
     df = clean_and_convert(df)
 
-    # 3. Display team stat leaders
-    display_team_stat_leaders(df, TEAM_NAME, ADV_STATS, MIN_PA)
+    while True:
+        print("\nChoose an option:")
+        print("1. Display team stat leaders")
+        print("2. Generate Optimized Batting Order (ABC Only)")
+        print("3. Exit")
 
-    # 4. Display optimized batting order
-    generate_optimized_batting_order(df, TEAM_NAME, handedness, override_spots, MIN_PA)
+        choice = input("Enter your choice (1-3): ")
+
+        if choice == '1':
+            choose_team_and_show(df)
+
+        elif choice == '2':
+            while True: 
+                generate_optimized_batting_order(df, "Austin Baseball Club", handedness, override_spots, MIN_PA)
+                break 
+
+        elif choice == '3':
+            print("Goodbye!")
+            break
+        
+        else:
+            print("Invalid choice. Try again")
 
 if __name__ == "__main__":
     main()
