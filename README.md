@@ -10,7 +10,7 @@ This CLI application scrapes and analyzes player stats from the Capital of Texas
 4. Open the **Terminal** (menu ▶️ **Terminal** ▶️ **New Terminal**)  
 
 
-## ▶️ Running The ClI
+## ▶️ Running The CLI
    ```bash
    python cli.py
    ```
