@@ -2,6 +2,8 @@
 import logging
 import click
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 from ctbl_scraper import (
     ScraperConfig, StatsConfig,
     CTBLScraper, StatsProcessor
@@ -150,7 +152,9 @@ def plot_leaders(obj):
         plt.title(f"Top 10 by {stat}")
         plt.xlabel(stat)
         plt.tight_layout()
-        plt.show()
+        filename = f"{stat}_leaderboard.png"
+        plt.savefig(filename, bbox_inches="tight")
+        click.echo(f"📈 Saved chart to {filename}")
 
 if __name__ == "__main__":
     cli()
